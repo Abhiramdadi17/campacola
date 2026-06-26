@@ -146,11 +146,13 @@ export default function GrnCreation() {
   const location = useLocation()
   const { state, dispatch, addToast } = useStore()
   const prefill = location.state || {}
+  // Fall back to the active journey's vehicle number when arriving via sidebar (no location.state)
+  const prefillVehicle = prefill.vehicleNumber || state.activeJourney?.vehicleNumber || ''
 
   const [step, setStep] = useState(0)
   const [selectedPO, setSelectedPO] = useState(null)
   const [poSearch, setPoSearch] = useState('')
-  const [vehicleNumber, setVehicleNumber] = useState(prefill.vehicleNumber || '')
+  const [vehicleNumber, setVehicleNumber] = useState(prefillVehicle)
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().slice(0, 10))
   const [remarks, setRemarks] = useState('')
   const [attachments, setAttachments] = useState([])
@@ -559,7 +561,7 @@ export default function GrnCreation() {
                     value={vehicleNumber}
                     onChange={e => setVehicleNumber(e.target.value.toUpperCase())}
                     placeholder="e.g. MH12AB1234"
-                    autoFilled={!!prefill.vehicleNumber}
+                    autoFilled={!!prefillVehicle}
                     hint="Transport vehicle registration"
                   />
                   <InputField
