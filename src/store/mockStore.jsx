@@ -17,13 +17,14 @@ const initialTrucks = [
 ]
 
 const initialLots = [
-  { id: 'LOT-20240624-001', material: 'Cola Concentrate 30X', vendor: 'Pepsico Ingredients Ltd', qty: 480, unit: 'KG', status: 'APPROVED', grnId: 'GRN-20240624-001', location: 'A-01/B-04', arrivedAt: new Date(now.getTime() - 6 * 3600000).toISOString(), stage: 1 },
-  { id: 'LOT-20240624-002', material: 'Refined Sugar S-30', vendor: 'SugarTech Corp', qty: 1180, unit: 'KG', status: 'UNDER_QC', grnId: 'GRN-20240624-002', location: null, arrivedAt: new Date(now.getTime() - 2 * 3600000).toISOString(), stage: 1 },
-  { id: 'LOT-20240624-003', material: 'DM Water Grade A', vendor: 'AquaPure Solutions', qty: 790, unit: 'Litres', status: 'HOLD', grnId: 'GRN-20240624-003', location: null, arrivedAt: new Date(now.getTime() - 4.5 * 3600000).toISOString(), stage: 1 },
+  { id: 'LOT-20240624-001', material: 'Cola Concentrate 30X', vendor: 'Pepsico Ingredients Ltd', qty: 480, unit: 'KG', status: 'APPROVED', grnId: 'GRN-20240624-001', location: 'A-01/B-04', arrivedAt: new Date(now.getTime() - 6 * 3600000).toISOString(), grnTimestamp: new Date(now.getTime() - 6 * 3600000).toISOString(), vendorLotNo: 'VL-240624-A01', dcNo: 'DC-20240624-001', vehicleNumber: 'MH12AB1234', expiryDate: '2025-12-31', stage: 1 },
+  { id: 'LOT-20240624-002', material: 'Refined Sugar S-30', vendor: 'SugarTech Corp', qty: 1180, unit: 'KG', status: 'UNDER_QC', grnId: 'GRN-20240624-002', location: null, arrivedAt: new Date(now.getTime() - 2 * 3600000).toISOString(), grnTimestamp: new Date(now.getTime() - 2 * 3600000).toISOString(), vendorLotNo: 'VL-240624-S30', dcNo: 'DC-20240624-002', vehicleNumber: 'DL01CD5678', expiryDate: '2025-09-15', stage: 1 },
+  { id: 'LOT-20240624-003', material: 'DM Water Grade A', vendor: 'AquaPure Solutions', qty: 790, unit: 'Litres', status: 'HOLD', grnId: 'GRN-20240624-003', location: null, arrivedAt: new Date(now.getTime() - 4.5 * 3600000).toISOString(), grnTimestamp: new Date(now.getTime() - 4.5 * 3600000).toISOString(), vendorLotNo: 'VL-240624-DW01', dcNo: 'DC-20240624-003', vehicleNumber: 'KA05EF9012', expiryDate: '2025-06-30', stage: 1 },
 ]
 
 const initialExceptions = [
-  { id: 'EX-QC-01-001', code: 'EX-QC-01', type: 'QC_SLA_BREACH', severity: 'HIGH', status: 'OPEN', lotId: 'LOT-20240624-003', material: 'DM Water Grade A', triggeredAt: new Date(now.getTime() - 30 * 60000).toISOString(), actor: 'System', description: 'QC pending for >4h. SLA breached.', stage: 1 },
+  { id: 'EX-QC-01-001', code: 'EX-QC-01', type: 'QC_SLA_BREACH', severity: 'HIGH', status: 'OPEN', lotId: 'LOT-20240624-003', material: 'DM Water Grade A', triggeredAt: new Date(now.getTime() - 30 * 60000).toISOString(), actor: 'System', description: 'QC pending for >4h. SLA breached.', stage: 1, elapsedMs: 4.5 * 3600000 },
+  { id: 'EX-GRN-02-001', code: 'EX-GRN-02', type: 'MATERIAL_NOT_IN_MASTER', severity: 'HIGH', status: 'OPEN', lotId: null, material: 'Citric Acid Mono', triggeredAt: new Date(now.getTime() - 55 * 60000).toISOString(), actor: 'Store Operator', description: "Material 'Citric Acid Mono' not found in Material Master. GRN submission blocked.", stage: 1, blockedGrnId: 'GRN-PENDING-001', materialCode: 'MAT-CITRIC-MONO' },
 ]
 
 const initialBatches = [
@@ -65,6 +66,7 @@ const initialState = {
   lotCounter: 4,
   truckCounter: 4,
   exceptionCounter: 2,
+  activeJourney: null,   // tracks the live demo workflow (Truck → GRN → QA → Put Away)
 }
 
 function reducer(state, action) {
@@ -81,6 +83,7 @@ function reducer(state, action) {
     }
     case 'SUBMIT_GRN': {
       const lotId = `LOT-${dateStr}-00${state.lotCounter}`
+      const grnTs = new Date().toISOString()
       const lot = {
         id: lotId,
         material: action.payload.material,
@@ -90,10 +93,14 @@ function reducer(state, action) {
         status: 'UNDER_QC',
         grnId: action.payload.grnId,
         location: null,
-        arrivedAt: new Date().toISOString(),
+        arrivedAt: grnTs,
+        grnTimestamp: grnTs,
         stage: 1,
         vehicleNumber: action.payload.vehicleNumber,
         expiryDate: action.payload.expiryDate,
+        vendorLotNo: action.payload.vendorLotNo || '',
+        dcNo: action.payload.dcNo || '',
+        deliveryDate: action.payload.deliveryDate || '',
       }
       const updatedTrucks = state.trucks.map(t =>
         t.vehicleNumber === action.payload.vehicleNumber ? { ...t, grnRaised: true, grnId: action.payload.grnId } : t
@@ -107,9 +114,10 @@ function reducer(state, action) {
       }
     }
     case 'QA_DECISION': {
-      const { lotId, decision, rejectionReason, reinspectionDate } = action.payload
+      const { lotId, decision, rejectionReason, holdReason, reinspectionDate, inspectorName } = action.payload
       const newStatus = decision === 'PASS' ? 'APPROVED' : decision === 'HOLD' ? 'HOLD' : 'REJECTED'
-      const updatedLots = state.lots.map(l => l.id === lotId ? { ...l, status: newStatus, qcDecision: decision, rejectionReason, reinspectionDate, qcAt: new Date().toISOString() } : l)
+      const inspectionTs = new Date().toISOString()
+      const updatedLots = state.lots.map(l => l.id === lotId ? { ...l, status: newStatus, qcDecision: decision, rejectionReason, holdReason, reinspectionDate, inspectorName, inspectionTimestamp: inspectionTs, qcAt: inspectionTs } : l)
       let newExceptions = [...state.exceptions]
       let newActivity = [{ id: Date.now(), type: decision === 'PASS' ? 'LOT_APPROVED' : 'LOT_' + decision, text: `${lotId} QA ${decision} — ${newStatus}`, time: new Date().toISOString(), route: '/stage1/qa-inspection', lotId }, ...state.activity].slice(0, 20)
       if (decision === 'REJECT') {
@@ -153,6 +161,12 @@ function reducer(state, action) {
     }
     case 'SET_ROLE': {
       return { ...state, role: action.payload }
+    }
+    case 'SET_JOURNEY': {
+      return { ...state, activeJourney: { ...(state.activeJourney || {}), ...action.payload } }
+    }
+    case 'CLEAR_JOURNEY': {
+      return { ...state, activeJourney: null }
     }
     case 'SUBMIT_REQUISITION': {
       const newActivity = [{ id: Date.now(), type: 'REQUISITION', text: `Requisition ${action.payload.id} submitted`, time: new Date().toISOString(), route: '/stage2/requisition' }, ...state.activity].slice(0, 20)

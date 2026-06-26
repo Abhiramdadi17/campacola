@@ -6,6 +6,7 @@ import InputField from '../../components/InputField'
 import PrimaryButton from '../../components/PrimaryButton'
 import SecondaryButton from '../../components/SecondaryButton'
 import StatusBadge from '../../components/StatusBadge'
+import WorkflowJourneyBanner from '../../components/WorkflowJourneyBanner'
 
 const GATES = ['Gate 1', 'Gate 2', 'Weighbridge Entry']
 
@@ -47,6 +48,7 @@ export default function TruckArrival() {
     if (Object.keys(e).length) { setErrors(e); return }
     const id = `ARR-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-00${state.trucks.length + 1}`
     dispatch({ type: 'LOG_TRUCK', payload: { ...form, id } })
+    dispatch({ type: 'SET_JOURNEY', payload: { truckId: id, vehicleNumber: form.vehicleNumber, currentStep: 1, grnId: null, lotId: null, location: null } })
     addToast({ type: 'success', title: 'Arrival Logged', message: `Vehicle ${form.vehicleNumber} checked in at ${form.gate}` })
     setSubmitted({ id, ...form })
   }
@@ -104,6 +106,7 @@ export default function TruckArrival() {
 
       {/* Form column — fills available space */}
       <div>
+        <WorkflowJourneyBanner currentStep={1} />
         <StageNav />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
           <div style={{ width: 3, height: 16, background: 'var(--accent-cyan)', borderRadius: 2 }} />

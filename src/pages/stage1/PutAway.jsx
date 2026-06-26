@@ -6,6 +6,7 @@ import ScanInput from '../../components/ScanInput'
 import PrimaryButton from '../../components/PrimaryButton'
 import SecondaryButton from '../../components/SecondaryButton'
 import StatusBadge from '../../components/StatusBadge'
+import WorkflowJourneyBanner from '../../components/WorkflowJourneyBanner'
 
 const WAREHOUSE_ZONES = [
   { zone: 'Zone A', code: 'A', label: 'Dry Goods', color: '#5BC8D9', locations: ['A-01', 'A-02', 'A-03', 'A-04'] },
@@ -75,6 +76,7 @@ export default function PutAway() {
       type: 'CONFIRM_PUT_AWAY',
       payload: { lotId: selectedLot.id, location: scannedLocation.display, pallets, bags: totalBags }
     })
+    dispatch({ type: 'SET_JOURNEY', payload: { location: scannedLocation.display, currentStep: 4 } })
     addToast({ type: 'success', title: 'Inventory Updated', message: `${selectedLot.id} → ${scannedLocation.display} · AVAILABLE FOR ISSUANCE` })
     setDone(true)
   }
@@ -110,6 +112,7 @@ export default function PutAway() {
 
       {/* Main form column */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <WorkflowJourneyBanner currentStep={4} />
         <div style={{ display: 'flex', gap: 8 }}>
           <SecondaryButton size="sm" onClick={() => navigate('/stage1/qa-inspection')}>← QA Queue</SecondaryButton>
           <SecondaryButton size="sm" onClick={() => navigate('/stage2/requisition')}>Stage 2 →</SecondaryButton>
